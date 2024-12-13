@@ -1,47 +1,76 @@
-from configparser import SectionProxy
+from typing import Annotated
+from pydantic import BaseModel
+from fastapi import Depends
 from azure.identity.aio import ClientSecretCredential
 from msgraph import GraphServiceClient
 from msgraph.generated.users.users_request_builder import UsersRequestBuilder
+from msgraph.generated.sites.sites_request_builder import SitesRequestBuilder
+from msgraph.generated.drives.drives_request_builder import DrivesRequestBuilder
+from settings import GlobalSettingsDep
 
-class GraphState:
+class Site(BaseModel):
+    site_id: str
+    site_name: str | None
+    site_display: str | None
+    web_url: str
+
+class Drive(BaseModel):
+    site_id: str
+    site_name: str | None
+    drive_id: str
+    drive_name: str | None
+    web_url: str
+    drive_type: str
+
+class MsGraph:
     credential: ClientSecretCredential
     client: GraphServiceClient
 
-    def __init__(self, config):
-        client_id = config['clientId']
-        tenant_id = config['tenantId']
-        client_secret = config['clientSecret']
-
-        self.credentials = ClientSecretCredential(tenant_id, client_id, client_secret)
-
+    def __init__(self, settings: GlobalSettingsDep):
+        self.credentials = ClientSecretCredential(
+            settings.tenant_id, 
+            settings.client_id, 
+            settings.client_secret
+        )
         self.client = GraphServiceClient(self.credentials)
 
-    async def get_app_only_token(self):
-        graph_scope = 'https://graph.microsoft.com/.default'
-        access_token = await self.credentials.get_token(graph_scope)
-        return access_token.token
-
     async def list_users(self):
-        query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters(
-            select = ['displayName', 'id', 'mail'],
-            top = 25,
-            orderby = ['displayName']
-        )
+        resp = await self.client.users.get()
 
-        request_config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration(
-            query_parameters = query_params
-        )
-
-        users = await self.client.users.get(request_config)
-
-        return users
+        return resp.value
     
     async def list_sites(self):
-        sites = await self.client.sites.get()
+        resp = await self.client.sites.get()
 
-        return sites
+        return [
+            Site(
+                site_id = site.id,
+                site_name = site.name,
+                site_display = site.display_name,
+                web_url = site.web_url
+            )
+            for site in resp.value
+        ]
     
     async def list_drives(self):
-        drives = await self.client.drives.get()
+        aggr : list[Drive] = []
 
-        return drives
+        sites = await self.client.sites.get()
+        for site in sites.value:
+            drives = await self.client.sites.by_site_id(site.id).drives.get()
+            for drive in drives.value:
+                if drive.drive_type == "documentLibrary":
+                    aggr.append(
+                        Drive(
+                            site_id = site.id,
+                            site_name = site.name,
+                            drive_id = drive.id,
+                            drive_name = drive.name,
+                            web_url = drive.web_url,
+                            drive_type = drive.drive_type
+                        )
+                    )
+
+        return aggr
+    
+MsGraphDep = Annotated[MsGraph, Depends(MsGraph)]
