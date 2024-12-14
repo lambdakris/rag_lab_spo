@@ -60,3 +60,5 @@ To work with this repo you need:
 ## References
 
 https://github.com/microsoftgraph/msgraph-training-python/tree/main/app-auth
+https://github.com/microsoftgraph/msgraph-sdk-python
+https://learn.microsoft.com/en-us/graph/sdks/sdks-overview

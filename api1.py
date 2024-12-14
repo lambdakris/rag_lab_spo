@@ -1,16 +1,16 @@
-from fastapi import FastAPI, Depends, HTTPException
-from state import MsGraphDep
+from fastapi import APIRouter
+from msgraph1 import MsGraphDep
 
-api = FastAPI()
+router = APIRouter(prefix="/api1")
 
-@api.get("/users")
+@router.get("/users")
 async def users(msgraph: MsGraphDep):
     return await msgraph.list_users()
 
-@api.get("/sites")
+@router.get("/sites")
 async def sites(msgraph: MsGraphDep):
     return await msgraph.list_sites()
 
-@api.get("/drives")
+@router.get("/drives")
 async def drives(msgraph: MsGraphDep):
     return await msgraph.list_drives()
